@@ -1,6 +1,8 @@
 package com.github.jparkie.spark.elasticsearch.sql
 
 import com.github.jparkie.spark.elasticsearch.SparkEsBulkWriter
+import com.github.jparkie.spark.elasticsearch.SparkEsBulkUpdate
+
 import com.github.jparkie.spark.elasticsearch.conf.{ SparkEsMapperConf, SparkEsTransportClientConf, SparkEsWriteConf }
 import com.github.jparkie.spark.elasticsearch.transport.SparkEsTransportClientManager
 import org.apache.spark.sql.{ DataFrame, Row }
@@ -44,4 +46,26 @@ class SparkEsDataFrameFunctions(dataFrame: DataFrame) extends Serializable {
 
     sparkContext.runJob(dataFrame.rdd, sparkEsWriter.write _)
   }
+
+  def bulkUpdateToEs(
+    esIndex:                    String,
+    esType:                     String,
+    esId:                       String,
+    sparkEsTransportClientConf: SparkEsTransportClientConf = SparkEsTransportClientConf.fromSparkConf(sparkContext.getConf),
+    sparkEsMapperConf:          SparkEsMapperConf          = SparkEsMapperConf.fromSparkConf(sparkContext.getConf),
+    sparkEsWriteConf:           SparkEsWriteConf           = SparkEsWriteConf.fromSparkConf(sparkContext.getConf)
+  )(implicit sparkEsTransportClientManager: SparkEsTransportClientManager = sparkEsTransportClientManager): Unit = {
+    val sparkEsWriter = new SparkEsBulkUpdate[Row](
+      esIndex = esIndex,
+      esType = esType,
+      esId = esId,
+      esClient = () => sparkEsTransportClientManager.getTransportClient(sparkEsTransportClientConf),
+      sparkEsSerializer = new SparkEsDataFrameSerializer(dataFrame.schema),
+      sparkEsMapper = new SparkEsDataFrameMapper(sparkEsMapperConf),
+      sparkEsWriteConf = sparkEsWriteConf
+    )
+
+    sparkContext.runJob(dataFrame.rdd, sparkEsWriter.write _)
+  }
+
 }
